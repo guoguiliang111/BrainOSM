@@ -13,6 +13,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 #from pytorchtools import EarlyStopping
 import time
+from sklearn.model_selection import StratifiedKFold, train_test_split
 import math
 from torch.nn import init
 import pandas as pd
@@ -62,29 +63,6 @@ acc_3 = []
 acc_4 = []
 acc_5 = []
 
-# prec_1 = []
-# prec_2 = []
-# prec_3 = []
-# prec_4 = []
-# prec_5 = []
-#
-# recall_1 = []
-# recall_2 = []
-# recall_3 = []
-# recall_4 = []
-# recall_5 = []
-#
-# F1_1 = []
-# F1_2 = []
-# F1_3 = []
-# F1_4 = []
-# F1_5 = []
-#
-# auc_1 = []
-# auc_2 = []
-# auc_3 = []
-# auc_4 = []
-# auc_5 = []
 log_dir = args.log_dir
 
 
@@ -329,197 +307,233 @@ def normalize_adj_new(adj):
     # d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
     # return adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo().A
 # 数据集划分
+#
+# def cross_val_semi(selected_indices_list, raw_data, A, A1, A2, labels):
+#     kf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
+#     zip_list = list(zip(raw_data, A, A1, A2, labels))
+#     # 这里的随机打乱我的代码里没有
+#     random.Random(0).shuffle(zip_list)
+#     raw_data, A, A1, A2, labels = zip(*zip_list)
+#
+#     test_data_loader = []
+#     train_data_loader = []
+#     valid_data_loader = []
+#     raw_data = np.array(raw_data)
+#     A = np.array(A)
+#     A1 = np.array(A1)
+#     A2 = np.array(A2)
+#     labels = np.array(labels)
+#     for kk, (train_index, test_index) in enumerate(kf.split(A, labels)):
+#
+#         train_val_raw_data = raw_data[train_index]
+#
+#         train_val_adj, test_adj = A[train_index], A[test_index]
+#         train_val_adj1, test_adj1 = A1[train_index], A1[test_index]
+#         train_val_adj2, test_adj2 = A2[train_index], A2[test_index]
+#         train_val_labels, test_labels = labels[train_index], labels[test_index]
+#
+#         train_val_adj_labelled = np.array([train_val_adj[idx] for idx in range(train_index.shape[0]) if idx not in selected_indices_list[0]])
+#         train_val_adj_labelled1 = np.array([train_val_adj1[idx] for idx in range(train_index.shape[0]) if
+#                                   idx not in selected_indices_list[0]])
+#         train_val_adj_labelled2 = np.array([train_val_adj2[idx] for idx in range(train_index.shape[0]) if
+#                                    idx not in selected_indices_list[0]])
+#
+#         train_val_labels_labelled = np.array([train_val_labels[idx] for idx in range(train_index.shape[0]) if
+#                                    idx not in selected_indices_list[0]])
+#
+#         raw_labelled = np.array([train_val_raw_data[idx] for idx in range(train_index.shape[0]) if
+#                                      idx not in selected_indices_list[0]])
+#
+#         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
+#         test_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=False,
+#             num_workers=0)
+#         test_data_loader.append(test_dataset_loader)
+#
+#         dataset_sampler = datasets2_train_supervised(raw_labelled, train_val_adj_labelled, train_val_adj_labelled1, train_val_adj_labelled2, train_val_labels_labelled)
+#         train_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=True,
+#             num_workers=0)
+#         train_data_loader.append(train_dataset_loader)
+#         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
+#         val_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=False,
+#             num_workers=0)
+#         valid_data_loader.append(val_dataset_loader)
+#
+#     return train_data_loader, valid_data_loader, test_data_loader
+#
+#
+# def cross_val(raw_data, A, A1, A2, labels):
+#     kf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
+#     zip_list = list(zip(raw_data, A, A1, A2, labels))
+#     # 这里的随机打乱我的代码里没有
+#     random.Random(0).shuffle(zip_list)
+#     raw_data, A, A1, A2, labels = zip(*zip_list)
+#     # raw_data = list(raw_data)
+#     # print(type(raw_data))
+#     # print(raw_data.shape)
+#     test_data_loader = []
+#     train_data_loader = []
+#     valid_data_loader = []
+#     raw_data = np.array(raw_data)
+#     A = np.array(A)
+#     A1 = np.array(A1)
+#     A2 = np.array(A2)
+#     labels = np.array(labels)
+#     for kk, (train_index, test_index) in enumerate(kf.split(A, labels)):
+#
+#         train_val_adj, test_adj = A[train_index], A[test_index]
+#         train_val_adj1, test_adj1 = A1[train_index], A1[test_index]
+#         train_val_adj2, test_adj2 = A2[train_index], A2[test_index]
+#         train_val_labels, test_labels = labels[train_index], labels[test_index]
+#
+#
+#         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
+#         test_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=False,
+#             num_workers=0)
+#         test_data_loader.append(test_dataset_loader)
+#
+#         # dataset_sampler = datasets2_train(raw_labelled, raw_unlabelled, train_val_adj_labelled, train_val_adj_labelled1, train_val_adj_labelled2, train_val_labels_labelled, train_val_adj_unlabelled, train_val_adj_unlabelled1, train_val_adj_unlabelled2)
+#         dataset_sampler = datasets2_train_original(train_val_adj, train_val_adj1, train_val_adj2, train_val_labels)
+#         train_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=True,
+#             num_workers=0)
+#         train_data_loader.append(train_dataset_loader)
+#         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
+#         val_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=False,
+#             num_workers=0)
+#         valid_data_loader.append(val_dataset_loader)
+#
+#     return train_data_loader, valid_data_loader, test_data_loader
+
 
 def cross_val_semi(selected_indices_list, raw_data, A, A1, A2, labels):
     kf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
     zip_list = list(zip(raw_data, A, A1, A2, labels))
-    # 这里的随机打乱我的代码里没有
     random.Random(0).shuffle(zip_list)
     raw_data, A, A1, A2, labels = zip(*zip_list)
-    # raw_data = list(raw_data)
-    # print(type(raw_data))
-    # print(raw_data.shape)
-    test_data_loader = []
-    train_data_loader = []
-    valid_data_loader = []
-    raw_data = np.array(raw_data)
-    A = np.array(A)
-    A1 = np.array(A1)
-    A2 = np.array(A2)
-    labels = np.array(labels)
-    for kk, (train_index, test_index) in enumerate(kf.split(A, labels)):
-        # print(type(raw_data))
-        # print(raw_data.shape)
-        len_train_index = len(train_index)
-        train_val_raw_data = raw_data[train_index]
-        # train_val_raw_data = [raw_data[i] for i in train_index]
-        # test_raw_data = [raw_data[i] for i in test_index]
-        train_val_adj, test_adj = A[train_index], A[test_index]
-        train_val_adj1, test_adj1 = A1[train_index], A1[test_index]
-        train_val_adj2, test_adj2 = A2[train_index], A2[test_index]
-        train_val_labels, test_labels = labels[train_index], labels[test_index]
 
-        train_val_adj_labelled = np.array([train_val_adj[idx] for idx in range(train_index.shape[0]) if idx not in selected_indices_list[0]])
-        train_val_adj_labelled1 = np.array([train_val_adj1[idx] for idx in range(train_index.shape[0]) if
-                                  idx not in selected_indices_list[0]])
-        train_val_adj_labelled2 = np.array([train_val_adj2[idx] for idx in range(train_index.shape[0]) if
-                                   idx not in selected_indices_list[0]])
-        # train_val_adj_labelled1 = train_val_adj1[:labelled_num]
-        # train_val_adj_labelled2 = train_val_adj2[:labelled_num]
-        train_val_labels_labelled = np.array([train_val_labels[idx] for idx in range(train_index.shape[0]) if
-                                   idx not in selected_indices_list[0]])
-        # train_val_labels_labelled = train_val_labels[:labelled_num]
-        raw_labelled = np.array([train_val_raw_data[idx] for idx in range(train_index.shape[0]) if
-                                     idx not in selected_indices_list[0]])
+    train_data_loader, valid_data_loader, test_data_loader = [], [], []
 
+    raw_data, A, A1, A2, labels = map(np.array, (raw_data, A, A1, A2, labels))
+
+    for kk, (train_val_index, test_index) in enumerate(kf.split(A, labels)):
+        # === 第一步：拿到 train_val / test ===
+        train_val_raw_data = raw_data[train_val_index]
+        train_val_adj, test_adj = A[train_val_index], A[test_index]
+        train_val_adj1, test_adj1 = A1[train_val_index], A1[test_index]
+        train_val_adj2, test_adj2 = A2[train_val_index], A2[test_index]
+        train_val_labels, test_labels = labels[train_val_index], labels[test_index]
+
+        # === 第二步：在 train_val 里再划分 train / val ===
+        train_sub_idx, val_idx = train_test_split(
+            np.arange(len(train_val_labels)),
+            test_size=0.2,
+            stratify=train_val_labels,
+            random_state=kk
+        )
+
+        # ---- Train (只取 labelled) ----
+        train_val_adj_labelled = np.array([train_val_adj[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+        train_val_adj_labelled1 = np.array([train_val_adj1[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+        train_val_adj_labelled2 = np.array([train_val_adj2[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+        train_val_labels_labelled = np.array([train_val_labels[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+        raw_labelled = np.array([train_val_raw_data[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+
+        dataset_sampler = datasets2_train_supervised(
+            raw_labelled,
+            train_val_adj_labelled,
+            train_val_adj_labelled1,
+            train_val_adj_labelled2,
+            train_val_labels_labelled
+        )
+        train_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=True, num_workers=0)
+        train_data_loader.append(train_loader)
+
+        # ---- Validation ----
+        dataset_sampler = datasets2(
+            train_val_adj[val_idx],
+            train_val_adj1[val_idx],
+            train_val_adj2[val_idx],
+            train_val_labels[val_idx]
+        )
+        val_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        valid_data_loader.append(val_loader)
+
+        # ---- Test ----
         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
-        test_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=0)
-        test_data_loader.append(test_dataset_loader)
-
-        dataset_sampler = datasets2_train_supervised(raw_labelled, train_val_adj_labelled, train_val_adj_labelled1, train_val_adj_labelled2, train_val_labels_labelled)
-        train_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=True,
-            num_workers=0)
-        train_data_loader.append(train_dataset_loader)
-        dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
-        val_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=0)
-        valid_data_loader.append(val_dataset_loader)
+        test_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        test_data_loader.append(test_loader)
 
     return train_data_loader, valid_data_loader, test_data_loader
+
 
 def cross_val(raw_data, A, A1, A2, labels):
     kf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
     zip_list = list(zip(raw_data, A, A1, A2, labels))
-    # 这里的随机打乱我的代码里没有
     random.Random(0).shuffle(zip_list)
     raw_data, A, A1, A2, labels = zip(*zip_list)
-    # raw_data = list(raw_data)
-    # print(type(raw_data))
-    # print(raw_data.shape)
-    test_data_loader = []
-    train_data_loader = []
-    valid_data_loader = []
-    raw_data = np.array(raw_data)
-    A = np.array(A)
-    A1 = np.array(A1)
-    A2 = np.array(A2)
-    labels = np.array(labels)
-    for kk, (train_index, test_index) in enumerate(kf.split(A, labels)):
-        # print(type(raw_data))
-        # print(raw_data.shape)
-        len_train_index = len(train_index)
-        # labelled_num = int(len_train_index * args.ratio)
-        train_val_raw_data = raw_data[train_index]
-        # train_val_raw_data = [raw_data[i] for i in train_index]
-        # test_raw_data = [raw_data[i] for i in test_index]
-        train_val_adj, test_adj = A[train_index], A[test_index]
-        train_val_adj1, test_adj1 = A1[train_index], A1[test_index]
-        train_val_adj2, test_adj2 = A2[train_index], A2[test_index]
-        train_val_labels, test_labels = labels[train_index], labels[test_index]
 
-        # train_val_adj_labelled = train_val_adj[:labelled_num]
-        # train_val_adj_labelled1 = train_val_adj1[:labelled_num]
-        # train_val_adj_labelled2 = train_val_adj2[:labelled_num]
-        # train_val_labels_labelled = train_val_labels[:labelled_num]
-        # raw_labelled = train_val_raw_data[:labelled_num]
-        #
-        # train_val_adj_unlabelled = train_val_adj[labelled_num:]
-        # train_val_adj_unlabelled1 = train_val_adj1[labelled_num:]
-        # train_val_adj_unlabelled2 = train_val_adj2[labelled_num:]
-        # raw_unlabelled = train_val_raw_data[labelled_num:]
+    train_data_loader, valid_data_loader, test_data_loader = [], [], []
 
-        # if args.ratio > 0.5:
-        #     num_to_fill = 2 * labelled_num - len_train_index
-        #     # 计算需要将标记数据复制的次数
-        #     num_repeats = int(np.ceil(num_to_fill / (len_train_index - labelled_num)))
-        #     # 复制标记数据
-        #     filled_data = np.repeat(train_val_adj_unlabelled, num_repeats, axis=0)
-        #     filled_data1 = np.repeat(train_val_adj_unlabelled1, num_repeats, axis=0)
-        #     filled_data2 = np.repeat(train_val_adj_unlabelled2, num_repeats, axis=0)
-        #     filled_raw_unlabelled = np.repeat(raw_unlabelled, num_repeats, axis=0)
-        #     # 截取填充后的数据，使其长度与未标记数据相同或不超过
-        #     filled_data = filled_data[:num_to_fill]
-        #     filled_data1 = filled_data1[:num_to_fill]
-        #     filled_data2 = filled_data2[:num_to_fill]
-        #     filled_raw_unlabelled = filled_raw_unlabelled[:num_to_fill]
-        #     # 将填充后的数据与未标记数据拼接
-        #     X_train_unlabeled = np.concatenate((train_val_adj_unlabelled, filled_data), axis=0)
-        #     X_train_unlabeled1 = np.concatenate((train_val_adj_unlabelled1, filled_data1), axis=0)
-        #     X_train_unlabeled2 = np.concatenate((train_val_adj_unlabelled2, filled_data2), axis=0)
-        #     raw_unlabelled = np.concatenate((raw_unlabelled, filled_raw_unlabelled), axis=0)
-        #
-        #     train_val_adj_unlabelled = X_train_unlabeled[:labelled_num]
-        #     train_val_adj_unlabelled1 = X_train_unlabeled1[:labelled_num]
-        #     train_val_adj_unlabelled2 = X_train_unlabeled2[:labelled_num]
-        #     raw_unlabelled = raw_unlabelled[:labelled_num]
-        # elif args.ratio < 0.5:
-        #     num_to_fill = len_train_index - 2 * labelled_num
-        #     # 计算需要将标记数据复制的次数
-        #     num_repeats = int(np.ceil(num_to_fill / labelled_num))
-        #     filled_data = np.repeat(train_val_adj_labelled, num_repeats, axis=0)
-        #     filled_data1 = np.repeat(train_val_adj_labelled1, num_repeats, axis=0)
-        #     filled_data2 = np.repeat(train_val_adj_labelled2, num_repeats, axis=0)
-        #     filled_raw_labelled = np.repeat(raw_labelled, num_repeats, axis=0)
-        #     filled_Y = np.repeat(train_val_labels_labelled, num_repeats, axis=0)
-        #
-        #     # 截取填充后的数据，使其长度与未标记数据相同或不超过
-        #     filled_data = filled_data[:num_to_fill]
-        #     filled_data1 = filled_data1[:num_to_fill]
-        #     filled_data2 = filled_data2[:num_to_fill]
-        #     filled_Y = filled_Y[:num_to_fill]
-        #     filled_raw_labelled = filled_raw_labelled[:num_to_fill]
-        #
-        #     # 将填充后的数据与标记数据拼接
-        #     train_val_adj_labelled = np.concatenate((train_val_adj_labelled, filled_data), axis=0)
-        #     train_val_adj_labelled1 = np.concatenate((train_val_adj_labelled1, filled_data1), axis=0)
-        #     train_val_adj_labelled2 = np.concatenate((train_val_adj_labelled2, filled_data2), axis=0)
-        #     raw_labelled = np.concatenate((raw_labelled, filled_raw_labelled), axis=0)
-        #     train_val_labels_labelled = np.concatenate((train_val_labels_labelled, filled_Y), axis=0)
-        #
-        #     train_val_adj_labelled = train_val_adj_labelled[:len_train_index-labelled_num]
-        #     train_val_adj_labelled1 = train_val_adj_labelled1[:len_train_index - labelled_num]
-        #     train_val_adj_labelled2 = train_val_adj_labelled2[:len_train_index - labelled_num]
-        #     raw_labelled = raw_labelled[:len_train_index - labelled_num]
-        #     train_val_labels_labelled = train_val_labels_labelled[:len_train_index - labelled_num]
+    raw_data, A, A1, A2, labels = map(np.array, (raw_data, A, A1, A2, labels))
 
+    for kk, (train_val_index, test_index) in enumerate(kf.split(A, labels)):
+        # === 第一步：拿到 train_val / test ===
+        train_val_adj, test_adj = A[train_val_index], A[test_index]
+        train_val_adj1, test_adj1 = A1[train_val_index], A1[test_index]
+        train_val_adj2, test_adj2 = A2[train_val_index], A2[test_index]
+        train_val_labels, test_labels = labels[train_val_index], labels[test_index]
 
+        # === 第二步：在 train_val 里再划分 train / val ===
+        train_sub_idx, val_idx = train_test_split(
+            np.arange(len(train_val_labels)),
+            test_size=0.2,
+            stratify=train_val_labels,
+            random_state=kk
+        )
+
+        # ---- Train ----
+        dataset_sampler = datasets2_train_original(
+            train_val_adj[train_sub_idx],
+            train_val_adj1[train_sub_idx],
+            train_val_adj2[train_sub_idx],
+            train_val_labels[train_sub_idx]
+        )
+        train_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=True, num_workers=0)
+        train_data_loader.append(train_loader)
+
+        # ---- Validation ----
+        dataset_sampler = datasets2(
+            train_val_adj[val_idx],
+            train_val_adj1[val_idx],
+            train_val_adj2[val_idx],
+            train_val_labels[val_idx]
+        )
+        val_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        valid_data_loader.append(val_loader)
+
+        # ---- Test ----
         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
-        test_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=0)
-        test_data_loader.append(test_dataset_loader)
-
-        # dataset_sampler = datasets2_train(raw_labelled, raw_unlabelled, train_val_adj_labelled, train_val_adj_labelled1, train_val_adj_labelled2, train_val_labels_labelled, train_val_adj_unlabelled, train_val_adj_unlabelled1, train_val_adj_unlabelled2)
-        dataset_sampler = datasets2_train_original(train_val_adj, train_val_adj1, train_val_adj2, train_val_labels)
-        train_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=True,
-            num_workers=0)
-        train_data_loader.append(train_dataset_loader)
-        dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
-        val_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=0)
-        valid_data_loader.append(val_dataset_loader)
+        test_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        test_data_loader.append(test_loader)
 
     return train_data_loader, valid_data_loader, test_data_loader
-
-
 #############################################################################
 #############################################################################
 
@@ -1365,7 +1379,7 @@ def train_original(test_data_loaders, dataset, student, val_dataset=None, test_d
     # model.load_state_dict(torch.load('./GroupINN_model/checkpoint' + str(phi) + '_' + str(ii) + '.pt'))
     return student, selected_indices
 
-def train(raw_data, test_data_loaders, dataset, student, teacher, val_dataset=None, test_dataset=None,
+def train(raw_data, test_data_loaders, dataset, student, val_dataset=None, test_dataset=None,
           device='cpu', phi=None, e=5, supernode=8, fold=0):
 
     optimizer2 = torch.optim.Adam(filter(lambda p: p.requires_grad, student.parameters()), lr=0.0001,
@@ -1444,7 +1458,7 @@ def train(raw_data, test_data_loaders, dataset, student, teacher, val_dataset=No
                 time3 = time.time()
                 nn.utils.clip_grad_norm_(student.parameters(), 2.0)
                 optimizer2.step()
-                ema_update(teacher=teacher, student=student, ema_decay=0.99, cur_step=idx + pbar * (epoch - 1))
+
                 # cosinLR2.step()
                 iter += 1
                 avg_loss += loss
@@ -1596,11 +1610,9 @@ def main():
     selected_indices_list = []
     for i in range(len(train_data_loaders)):
         student = model_gnn(8, 8, 2)
-        teacher = model_gnn(8, 8, 2)
         # model.load_state_dict(torch.load('GroupINN_model/checkpoint0.6_' + str(jj) + '.pt'))
         jj+=1
         student.to(device)
-        teacher.to(device)
         # print('model:', model)
         model, selected_indices = train_original(test_data_loaders[i], train_data_loaders[i], student, val_dataset=valid_data_loaders[i],
                       test_dataset=test_data_loaders[i], device=device, phi=0.6, e=args.epochs_original, supernode=args.super_nodes, fold=i)
@@ -1629,13 +1641,11 @@ def main():
     selected_indices_list = []
     for i in range(len(train_data_loaders)):
         student = model_gnn(8, 8, 2)
-        teacher = model_gnn(8, 8, 2)
         # model.load_state_dict(torch.load('GroupINN_model/checkpoint0.6_' + str(jj) + '.pt'))
         jj+=1
         student.to(device)
-        teacher.to(device)
         # print('model:', model)
-        model = train(raw_data, test_data_loaders[i], train_data_loaders[i], student, teacher, val_dataset=valid_data_loaders[i],
+        model = train(raw_data, test_data_loaders[i], train_data_loaders[i], student,  val_dataset=valid_data_loaders[i],
                       test_dataset=test_data_loaders[i], device=device, phi=0.6, e=args.epochs, supernode=args.super_nodes, fold=i)
         # selected_indices_list.append(selected_indices)
         # dir = './params' + str(i) + str(8) + '.pth'
@@ -1657,77 +1667,17 @@ def main():
     print(result1)
     print(result2)
     print('------------------------------------')
-    # np.save("result约束1_0.npy", np.array(pres[0]))
-    # np.save("result约束1_1.npy", np.array(pres[1]))
-    # np.save("result约束1_2.npy", np.array(pres[2]))
-    # np.save("result约束1_3.npy", np.array(pres[3]))
-    # np.save("result约束1_4.npy", np.array(pres[4]))
+
     for i in range(len(train_data_loaders)):
         pres[i] = pres[i].tolist()
         temp = np.array(pres[i])
         res = np.argmax(temp, axis=1)
-        # for j in range(len(pres[i])):
-        #     if pres[i][j] >= 3:
-        #         pres[i][j] = 1
-        #     else:
-        #         pres[i][j] = 0
+
         pres[i] = np.array(res)
         test_result, _ = evaluate_all(test_data_loaders[i], pres[i])
         print(test_result)
         result.append(test_result)
-    length = len(acc_1)
-    # prec_avg = [(prec_1[i] + prec_2[i] + prec_3[i] + prec_4[i] + prec_5[i]) / 5 for i in range(length)]
-    # recall_avg = [(recall_1[i] + recall_2[i] + recall_3[i] + recall_4[i] + recall_5[i]) / 5 for i in range(length)]
-    acc_avg = [(acc_1[i] + acc_2[i] + acc_3[i] + acc_4[i] + acc_5[i]) / 5 for i in range(length)]
-    # F1_avg = [(F1_1[i] + F1_2[i] + F1_3[i] + F1_4[i] + F1_5[i]) / 5 for i in range(length)]
-    # auc_avg = [(auc_1[i] + auc_2[i] + auc_3[i] + auc_4[i] + auc_5[i]) / 5 for i in range(length)]
-
-    for epoch in range(length):
-        # 将每个指标的数值写入对应的标量图中
-        # writer1.add_scalar('prec_avg/Epoch', prec_avg[epoch], epoch + 1)
-        # writer1.add_scalar('recall_avg/Epoch', recall_avg[epoch], epoch + 1)
-        writer1.add_scalar('acc_avg/Epoch', acc_avg[epoch], epoch + 1)
-        # writer1.add_scalar('F1_avg/Epoch', F1_avg[epoch], epoch + 1)
-        # writer1.add_scalar('auc_avg/Epoch', auc_avg[epoch], epoch + 1)
-
-    writer1.close()
-    quit()
-
 
 
 if __name__ == "__main__":
     main()
-'''
-[{'prec': 0.676056338028169, 'recall': 0.5925925925925926, 'acc': 0.68, 'F1': 0.6743753322700691, 'auc': 0.6739558707643815, 'matrix': array([[71, 23],
-       [33, 48]])}, {'prec': 0.6338028169014085, 'recall': 0.5555555555555556, 'acc': 0.6436781609195402, 'F1': 0.637889366272825, 'auc': 0.6379928315412187, 'matrix': array([[67, 26],
-       [36, 45]])}, {'prec': 0.546875, 'recall': 0.43209876543209874, 'acc': 0.5689655172413793, 'F1': 0.5566502463054187, 'auc': 0.5601354042214257, 'matrix': array([[64, 29],
-       [46, 35]])}, {'prec': 0.6153846153846154, 'recall': 0.6, 'acc': 0.6436781609195402, 'F1': 0.6406395736175883, 'auc': 0.6404255319148936, 'matrix': array([[64, 30],
-       [32, 48]])}, {'prec': 0.5774647887323944, 'recall': 0.5125, 'acc': 0.603448275862069, 'F1': 0.5963962752546474, 'auc': 0.5966755319148935, 'matrix': array([[64, 30],
-       [39, 41]])}]
-[{'prec': 0.6615384615384615, 'recall': 0.5308641975308642, 'acc': 0.6571428571428571, 'F1': 0.6474617244157937, 'auc': 0.6484108221696875, 'matrix': array([[72, 22],
-       [38, 43]])}, {'prec': 0.7014925373134329, 'recall': 0.5802469135802469, 'acc': 0.6896551724137931, 'F1': 0.6825675675675675, 'auc': 0.6825965750696933, 'matrix': array([[73, 20],
-       [34, 47]])}, {'prec': 0.5490196078431373, 'recall': 0.691358024691358, 'acc': 0.5919540229885057, 'F1': 0.5908594138102335, 'auc': 0.5983671843886897, 'matrix': array([[47, 46],
-       [25, 56]])}, {'prec': 0.5753424657534246, 'recall': 0.525, 'acc': 0.603448275862069, 'F1': 0.5975867269984918, 'auc': 0.5976063829787234, 'matrix': array([[63, 31],
-       [38, 42]])}, {'prec': 0.547945205479452, 'recall': 0.5, 'acc': 0.5804597701149425, 'F1': 0.5742584213172448, 'auc': 0.5744680851063829, 'matrix': array([[61, 33],
-       [40, 40]])}]
-[{'prec': 0.6712328767123288, 'recall': 0.6049382716049383, 'acc': 0.68, 'F1': 0.6753246753246753, 'auc': 0.6748095613343841, 'matrix': array([[70, 24],
-       [32, 49]])}, {'prec': 0.6447368421052632, 'recall': 0.6049382716049383, 'acc': 0.6609195402298851, 'F1': 0.6576516490479207, 'auc': 0.6573078454798885, 'matrix': array([[66, 27],
-       [32, 49]])}, {'prec': 0.5569620253164557, 'recall': 0.5432098765432098, 'acc': 0.5862068965517241, 'F1': 0.5835106382978723, 'auc': 0.5834328952608523, 'matrix': array([[58, 35],
-       [37, 44]])}, {'prec': 0.5897435897435898, 'recall': 0.575, 'acc': 0.6206896551724138, 'F1': 0.6174550299800132, 'auc': 0.6172872340425531, 'matrix': array([[62, 32],
-       [34, 46]])}, {'prec': 0.6103896103896104, 'recall': 0.5875, 'acc': 0.6379310344827587, 'F1': 0.6344415913562543, 'auc': 0.6341755319148936, 'matrix': array([[64, 30],
-       [33, 47]])}]
-------------------------------------
-{'prec': 0.6956521739130435, 'recall': 0.5925925925925926, 'acc': 0.6914285714285714, 'F1': 0.6849999999999999, 'auc': 0.6845941686367218, 'matrix': array([[73, 21],
-       [33, 48]])}
-{'prec': 0.7285714285714285, 'recall': 0.6296296296296297, 'acc': 0.7183908045977011, 'F1': 0.7133828621373584, 'auc': 0.7126642771804063, 'matrix': array([[74, 19],
-       [30, 51]])}
-{'prec': 0.5903614457831325, 'recall': 0.6049382716049383, 'acc': 0.6206896551724138, 'F1': 0.6194326617179216, 'auc': 0.6196734368777379, 'matrix': array([[59, 34],
-       [32, 49]])}
-{'prec': 0.6493506493506493, 'recall': 0.625, 'acc': 0.6724137931034483, 'F1': 0.6692566778937539, 'auc': 0.6688829787234043, 'matrix': array([[67, 27],
-       [30, 50]])}
-{'prec': 0.575, 'recall': 0.575, 'acc': 0.6091954022988506, 'F1': 0.6066489361702128, 'auc': 0.6066489361702128, 'matrix': array([[60, 34],
-       [34, 46]])}
-
-Process finished with exit code 0
-662
-'''

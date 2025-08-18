@@ -37,11 +37,17 @@ def get_args(known=False):
                         help='path to the label')
     parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--split_num', type=int, default=5, metavar='S', help='number of K split')
-    parser.add_argument('--ratio', type=int, default=0.90, metavar='S', help='ratio of labelled data')
+    parser.add_argument('--ratio_outlier', type=int, default=0.08, metavar='S', help='ratio of labelled data')
     parser.add_argument('--log_dir', type=str, default=r'MTL_0.9_noiseup_protype_supervised', help='path of tensorboard')
     parser.add_argument('--num_workers', type=int, default=4, metavar='S', help='number of cpu workers')
     parser.add_argument('--epochs', type=int, default=500, metavar='S', help='number of epochs')
-    parser.add_argument('--epochs_original', type=int, default=300, metavar='S', help='number of epochs')
+    parser.add_argument('--epochs_original', type=int, default=300, metavar='S', help='number of original epochs')
+    parser.add_argument('--epochs_early', type=int, default=200, metavar='S', help='number of early epochs')
+    parser.add_argument('--epochs_middle', type=int, default=300, metavar='S', help='number of middle epochs')
+    parser.add_argument('--epochs_late', type=int, default=500, metavar='S', help='number of late epochs')
+    parser.add_argument('--w_early', type=int, default=0.1, metavar='S', help='weight of early')
+    parser.add_argument('--w_middle', type=int, default=0.3, metavar='S', help='weight of middle')
+    parser.add_argument('--w_late', type=int, default=0.6, metavar='S', help='weight of late')
     parser.add_argument('--batch_size', type=int, default=128, metavar='S', help='number of batch_size')
     parser.add_argument('--phi', type=int, default=0.6, metavar='S', help='phi for cal_pcc')
     parser.add_argument('--phi1', type=int, default=0.4, metavar='S', help='phi for cal_pcc')
@@ -330,132 +336,230 @@ def normalize_adj_new(adj):
     # return adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo().A
 # 数据集划分
 
+# def cross_val_semi(selected_indices_list, raw_data, A, A1, A2, labels):
+#     kf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
+#     zip_list = list(zip(raw_data, A, A1, A2, labels))
+#     # 这里的随机打乱我的代码里没有
+#     random.Random(0).shuffle(zip_list)
+#     raw_data, A, A1, A2, labels = zip(*zip_list)
+#
+#     test_data_loader = []
+#     train_data_loader = []
+#     valid_data_loader = []
+#     raw_data = np.array(raw_data)
+#     A = np.array(A)
+#     A1 = np.array(A1)
+#     A2 = np.array(A2)
+#     labels = np.array(labels)
+#     for kk, (train_index, test_index) in enumerate(kf.split(A, labels)):
+#
+#         train_val_raw_data = raw_data[train_index]
+#
+#         train_val_adj, test_adj = A[train_index], A[test_index]
+#         train_val_adj1, test_adj1 = A1[train_index], A1[test_index]
+#         train_val_adj2, test_adj2 = A2[train_index], A2[test_index]
+#         train_val_labels, test_labels = labels[train_index], labels[test_index]
+#
+#         train_val_adj_labelled = np.array([train_val_adj[idx] for idx in range(train_index.shape[0]) if idx not in selected_indices_list[0]])
+#         train_val_adj_labelled1 = np.array([train_val_adj1[idx] for idx in range(train_index.shape[0]) if
+#                                   idx not in selected_indices_list[0]])
+#         train_val_adj_labelled2 = np.array([train_val_adj2[idx] for idx in range(train_index.shape[0]) if
+#                                    idx not in selected_indices_list[0]])
+#
+#         train_val_labels_labelled = np.array([train_val_labels[idx] for idx in range(train_index.shape[0]) if
+#                                    idx not in selected_indices_list[0]])
+#
+#         raw_labelled = np.array([train_val_raw_data[idx] for idx in range(train_index.shape[0]) if
+#                                      idx not in selected_indices_list[0]])
+#
+#         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
+#         test_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=False,
+#             num_workers=0)
+#         test_data_loader.append(test_dataset_loader)
+#
+#         dataset_sampler = datasets2_train_supervised(raw_labelled, train_val_adj_labelled, train_val_adj_labelled1, train_val_adj_labelled2, train_val_labels_labelled)
+#         train_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=True,
+#             num_workers=0)
+#         train_data_loader.append(train_dataset_loader)
+#         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
+#         val_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=False,
+#             num_workers=0)
+#         valid_data_loader.append(val_dataset_loader)
+#
+#     return train_data_loader, valid_data_loader, test_data_loader
+#
+# def cross_val(raw_data, A, A1, A2, labels):
+#     kf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
+#     zip_list = list(zip(raw_data, A, A1, A2, labels))
+#     # 这里的随机打乱我的代码里没有
+#     random.Random(0).shuffle(zip_list)
+#     raw_data, A, A1, A2, labels = zip(*zip_list)
+#
+#     test_data_loader = []
+#     train_data_loader = []
+#     valid_data_loader = []
+#     raw_data = np.array(raw_data)
+#     A = np.array(A)
+#     A1 = np.array(A1)
+#     A2 = np.array(A2)
+#     labels = np.array(labels)
+#     for kk, (train_index, test_index) in enumerate(kf.split(A, labels)):
+#
+#         train_val_adj, test_adj = A[train_index], A[test_index]
+#         train_val_adj1, test_adj1 = A1[train_index], A1[test_index]
+#         train_val_adj2, test_adj2 = A2[train_index], A2[test_index]
+#         train_val_labels, test_labels = labels[train_index], labels[test_index]
+#
+#
+#
+#         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
+#         test_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=False,
+#             num_workers=0)
+#         test_data_loader.append(test_dataset_loader)
+#
+#         # dataset_sampler = datasets2_train(raw_labelled, raw_unlabelled, train_val_adj_labelled, train_val_adj_labelled1, train_val_adj_labelled2, train_val_labels_labelled, train_val_adj_unlabelled, train_val_adj_unlabelled1, train_val_adj_unlabelled2)
+#         dataset_sampler = datasets2_train_original(train_val_adj, train_val_adj1, train_val_adj2, train_val_labels)
+#         train_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=True,
+#             num_workers=0)
+#         train_data_loader.append(train_dataset_loader)
+#         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
+#         val_dataset_loader = torch.utils.data.DataLoader(
+#             dataset_sampler,
+#             batch_size=args.batch_size,
+#             shuffle=False,
+#             num_workers=0)
+#         valid_data_loader.append(val_dataset_loader)
+#
+#     return train_data_loader, valid_data_loader, test_data_loader
+
+
+from sklearn.model_selection import StratifiedKFold, train_test_split
+
 def cross_val_semi(selected_indices_list, raw_data, A, A1, A2, labels):
     kf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
     zip_list = list(zip(raw_data, A, A1, A2, labels))
-    # 这里的随机打乱我的代码里没有
     random.Random(0).shuffle(zip_list)
     raw_data, A, A1, A2, labels = zip(*zip_list)
-    # raw_data = list(raw_data)
-    # print(type(raw_data))
-    # print(raw_data.shape)
-    test_data_loader = []
-    train_data_loader = []
-    valid_data_loader = []
-    raw_data = np.array(raw_data)
-    A = np.array(A)
-    A1 = np.array(A1)
-    A2 = np.array(A2)
-    labels = np.array(labels)
-    for kk, (train_index, test_index) in enumerate(kf.split(A, labels)):
-        # print(type(raw_data))
-        # print(raw_data.shape)
-        len_train_index = len(train_index)
-        train_val_raw_data = raw_data[train_index]
-        # train_val_raw_data = [raw_data[i] for i in train_index]
-        # test_raw_data = [raw_data[i] for i in test_index]
-        train_val_adj, test_adj = A[train_index], A[test_index]
-        train_val_adj1, test_adj1 = A1[train_index], A1[test_index]
-        train_val_adj2, test_adj2 = A2[train_index], A2[test_index]
-        train_val_labels, test_labels = labels[train_index], labels[test_index]
 
-        train_val_adj_labelled = np.array([train_val_adj[idx] for idx in range(train_index.shape[0]) if idx not in selected_indices_list[0]])
-        train_val_adj_labelled1 = np.array([train_val_adj1[idx] for idx in range(train_index.shape[0]) if
-                                  idx not in selected_indices_list[0]])
-        train_val_adj_labelled2 = np.array([train_val_adj2[idx] for idx in range(train_index.shape[0]) if
-                                   idx not in selected_indices_list[0]])
-        # train_val_adj_labelled1 = train_val_adj1[:labelled_num]
-        # train_val_adj_labelled2 = train_val_adj2[:labelled_num]
-        train_val_labels_labelled = np.array([train_val_labels[idx] for idx in range(train_index.shape[0]) if
-                                   idx not in selected_indices_list[0]])
-        # train_val_labels_labelled = train_val_labels[:labelled_num]
-        raw_labelled = np.array([train_val_raw_data[idx] for idx in range(train_index.shape[0]) if
-                                     idx not in selected_indices_list[0]])
+    train_data_loader, valid_data_loader, test_data_loader = [], [], []
+
+    raw_data, A, A1, A2, labels = map(np.array, (raw_data, A, A1, A2, labels))
+
+    for kk, (train_val_index, test_index) in enumerate(kf.split(A, labels)):
+
+        train_val_raw_data = raw_data[train_val_index]
+        train_val_adj, test_adj = A[train_val_index], A[test_index]
+        train_val_adj1, test_adj1 = A1[train_val_index], A1[test_index]
+        train_val_adj2, test_adj2 = A2[train_val_index], A2[test_index]
+        train_val_labels, test_labels = labels[train_val_index], labels[test_index]
+
+        train_sub_idx, val_idx = train_test_split(
+            np.arange(len(train_val_labels)),
+            test_size=0.2,
+            stratify=train_val_labels,
+            random_state=kk
+        )
+
+
+        train_val_adj_labelled = np.array([train_val_adj[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+        train_val_adj_labelled1 = np.array([train_val_adj1[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+        train_val_adj_labelled2 = np.array([train_val_adj2[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+        train_val_labels_labelled = np.array([train_val_labels[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+        raw_labelled = np.array([train_val_raw_data[i] for i in train_sub_idx if i not in selected_indices_list[0]])
+
+        dataset_sampler = datasets2_train_supervised(
+            raw_labelled,
+            train_val_adj_labelled,
+            train_val_adj_labelled1,
+            train_val_adj_labelled2,
+            train_val_labels_labelled
+        )
+        train_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=True, num_workers=0)
+        train_data_loader.append(train_loader)
+
+
+        dataset_sampler = datasets2(
+            train_val_adj[val_idx],
+            train_val_adj1[val_idx],
+            train_val_adj2[val_idx],
+            train_val_labels[val_idx]
+        )
+        val_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        valid_data_loader.append(val_loader)
+
 
         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
-        test_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=0)
-        test_data_loader.append(test_dataset_loader)
-
-        dataset_sampler = datasets2_train_supervised(raw_labelled, train_val_adj_labelled, train_val_adj_labelled1, train_val_adj_labelled2, train_val_labels_labelled)
-        train_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=True,
-            num_workers=0)
-        train_data_loader.append(train_dataset_loader)
-        dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
-        val_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=0)
-        valid_data_loader.append(val_dataset_loader)
+        test_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        test_data_loader.append(test_loader)
 
     return train_data_loader, valid_data_loader, test_data_loader
+
 
 def cross_val(raw_data, A, A1, A2, labels):
     kf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
     zip_list = list(zip(raw_data, A, A1, A2, labels))
-    # 这里的随机打乱我的代码里没有
     random.Random(0).shuffle(zip_list)
     raw_data, A, A1, A2, labels = zip(*zip_list)
-    # raw_data = list(raw_data)
-    # print(type(raw_data))
-    # print(raw_data.shape)
-    test_data_loader = []
-    train_data_loader = []
-    valid_data_loader = []
-    raw_data = np.array(raw_data)
-    A = np.array(A)
-    A1 = np.array(A1)
-    A2 = np.array(A2)
-    labels = np.array(labels)
-    for kk, (train_index, test_index) in enumerate(kf.split(A, labels)):
-        # print(type(raw_data))
-        # print(raw_data.shape)
-        len_train_index = len(train_index)
-        # labelled_num = int(len_train_index * args.ratio)
-        train_val_raw_data = raw_data[train_index]
-        # train_val_raw_data = [raw_data[i] for i in train_index]
-        # test_raw_data = [raw_data[i] for i in test_index]
-        train_val_adj, test_adj = A[train_index], A[test_index]
-        train_val_adj1, test_adj1 = A1[train_index], A1[test_index]
-        train_val_adj2, test_adj2 = A2[train_index], A2[test_index]
-        train_val_labels, test_labels = labels[train_index], labels[test_index]
 
+    train_data_loader, valid_data_loader, test_data_loader = [], [], []
+
+    raw_data, A, A1, A2, labels = map(np.array, (raw_data, A, A1, A2, labels))
+
+    for kk, (train_val_index, test_index) in enumerate(kf.split(A, labels)):
+
+        train_val_adj, test_adj = A[train_val_index], A[test_index]
+        train_val_adj1, test_adj1 = A1[train_val_index], A1[test_index]
+        train_val_adj2, test_adj2 = A2[train_val_index], A2[test_index]
+        train_val_labels, test_labels = labels[train_val_index], labels[test_index]
+
+        train_sub_idx, val_idx = train_test_split(
+            np.arange(len(train_val_labels)),
+            test_size=0.2,
+            stratify=train_val_labels,
+            random_state=kk
+        )
+
+
+        dataset_sampler = datasets2_train_original(
+            train_val_adj[train_sub_idx],
+            train_val_adj1[train_sub_idx],
+            train_val_adj2[train_sub_idx],
+            train_val_labels[train_sub_idx]
+        )
+        train_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=True, num_workers=0)
+        train_data_loader.append(train_loader)
+
+
+        dataset_sampler = datasets2(
+            train_val_adj[val_idx],
+            train_val_adj1[val_idx],
+            train_val_adj2[val_idx],
+            train_val_labels[val_idx]
+        )
+        val_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        valid_data_loader.append(val_loader)
 
 
         dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
-        test_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=0)
-        test_data_loader.append(test_dataset_loader)
-
-        # dataset_sampler = datasets2_train(raw_labelled, raw_unlabelled, train_val_adj_labelled, train_val_adj_labelled1, train_val_adj_labelled2, train_val_labels_labelled, train_val_adj_unlabelled, train_val_adj_unlabelled1, train_val_adj_unlabelled2)
-        dataset_sampler = datasets2_train_original(train_val_adj, train_val_adj1, train_val_adj2, train_val_labels)
-        train_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=True,
-            num_workers=0)
-        train_data_loader.append(train_dataset_loader)
-        dataset_sampler = datasets2(test_adj, test_adj1, test_adj2, test_labels)
-        val_dataset_loader = torch.utils.data.DataLoader(
-            dataset_sampler,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=0)
-        valid_data_loader.append(val_dataset_loader)
+        test_loader = torch.utils.data.DataLoader(dataset_sampler, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        test_data_loader.append(test_loader)
 
     return train_data_loader, valid_data_loader, test_data_loader
-
-
 
 
 class GCN(nn.Module):
@@ -1094,280 +1198,378 @@ def evaluate_all(dataset, preds):
 result = [0, 0, 0, 0, 0]
 ii = 0
 
+# def train_original(test_data_loaders, dataset, student, val_dataset=None, test_dataset=None,
+#           device='cpu', phi=None, early_epoch=200, middle_epoch=300, late_epoch=500, supernode=8, fold=0):
+#
+#     optimizer2 = torch.optim.Adam(filter(lambda p: p.requires_grad, student.parameters()), lr=0.0001,
+#                                   weight_decay=0.001)
+#     cosinLR2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer2, T_max=20, eta_min=0.000001)
+#     for name in student.state_dict():
+#         print(name)
+#     iter = 0
+#     best_val_acc = 0.0
+#     #early_stopping = EarlyStopping(patience=40, verbose=True)
+#     bestVal = []
+#     best = 0
+#     global ii
+#     ii += 1
+#
+#     for epoch in range(1, late_epoch+1):
+#         begin_time = time.time()
+#         avg_loss = 0.0
+#         student.train()
+#         print(epoch)
+#         print("train_for_original")
+#         # pbar = len(dataset)
+#         for idx, data in enumerate(dataset):
+#
+#             if epoch < 0:
+#                 for k, v in student.named_parameters():
+#                     if k != 'gcn1_p.kernel' and k != 'gcn2_p.kernel' and k != 'gcn3_p.kernel' and k != 'gcn1_n.kernel' and k != 'gcn2_n.kernel' and k != 'gcn3_n.kernel':
+#                         v.requires_grad = False  # 固定参数
+#                 time1 = time.time()
+#                 student.zero_grad()
+#                 adj = Variable(data['adj'].to(torch.float32), requires_grad=False).to(device)
+#                 label = Variable(data['label'].long()).to(device)
+#                 pred, losses = student(adj)
+#                 loss = F.cross_entropy(pred, label, size_average=True)
+#                 loss += losses
+#                 loss.backward()
+#                 time3 = time.time()
+#                 nn.utils.clip_grad_norm_(student.parameters(), 2.0)
+#                 optimizer1.step()
+#                 iter += 1
+#                 avg_loss += loss
+#             else:
+#                 for k, v in student.named_parameters():
+#                     v.requires_grad = True
+#                 time1 = time.time()
+#                 student.zero_grad()
+#
+#
+#                 adj_train = Variable(data['adj'].to(torch.float32), requires_grad=False).to(device)
+#                 adj1_train = Variable(data['adj1'].to(torch.float32), requires_grad=False).to(device)
+#                 adj2_train = Variable(data['adj2'].to(torch.float32), requires_grad=False).to(device)
+#
+#                 label = Variable(data['label'].long(), requires_grad=False).to(device)
+#
+#                 pred, pred1, pred2, losses, losses1, losses2 = student(adj_train, adj1_train, adj2_train)
+#
+#                 loss = F.cross_entropy(pred, label, size_average=True)
+#                 loss1 = F.cross_entropy(pred1, label, size_average=True)
+#                 loss2 = F.cross_entropy(pred2, label, size_average=True)
+#                 loss += losses
+#                 loss1 += losses1
+#                 loss2 += losses2
+#
+#                 loss = loss + loss1 + loss2
+#
+#                 loss.backward()
+#
+#                 time3 = time.time()
+#                 nn.utils.clip_grad_norm_(student.parameters(), 2.0)
+#                 optimizer2.step()
+#
+#                 iter += 1
+#                 avg_loss += loss
+#
+#         avg_loss /= idx + 1
+#         # print(avg_loss)
+#         eval_time = time.time()
+#         if val_dataset is not None:
+#             _, train_result, train_result1, train_result2, _, _, _ = evaluate(dataset, student, name='Train', device=device)
+#             val_loss, val_result, val_result1, val_result2, _, _, _ = evaluate(val_dataset, student, name='Validation', device=device)
+#             _, _, _, _, pre, pre1, pre2 = evaluate(test_data_loaders, student, name='Test', device=device)
+#             pre_all = pre + pre1 + pre2
+#
+#             pre_all = pre_all.tolist()
+#             temp = np.array(pre_all)
+#             res = np.argmax(temp, axis=1)
+#
+#             pre_all = np.array(res)
+#
+#             test_result, _ = evaluate_all(test_data_loaders, pre_all)
+#
+#             print('train1', train_result)
+#             print('val1', val_result)
+#             print('train2', train_result1)
+#             print('val2', val_result1)
+#             print('train3', train_result2)
+#             print('val3', val_result2)
+#
+#     for k, v in student.named_parameters():
+#         v.requires_grad = False
+#
+#     uncertainty_scores = []
+#     with torch.no_grad():
+#         for batch_idx, batch_data in enumerate(dataset):
+#             preds = []
+#             preds1 = []
+#             preds2 = []
+#             adj = Variable(batch_data['adj'].to(torch.float32), requires_grad=False).to(device)
+#             adj1 = Variable(batch_data['adj1'].to(torch.float32), requires_grad=False).to(device)
+#             adj2 = Variable(batch_data['adj2'].to(torch.float32), requires_grad=False).to(device)
+#             pred, pred1, pred2, losses, losses1, losses2 = student(adj, adj1, adj2)
+#             for i in pred:
+#                 preds.append(np.array(i.cpu()))
+#             for i in pred1:
+#                 preds1.append(np.array(i.cpu()))
+#             for i in pred2:
+#                 preds2.append(np.array(i.cpu()))
+#             pres_all = np.array(preds)
+#             pres_all1 = np.array(preds1)
+#             pres_all2 = np.array(preds2)
+#             pre_all = pres_all + pres_all1 + pres_all2
+#             # 计算不确定性
+#             batch_uncertainty_scores = uncertainty(pre_all)
+#             for idx, uncertainty_score in enumerate(batch_uncertainty_scores):
+#                 uncertainty_scores.append((uncertainty_score.item(), batch_idx * args.batch_size + idx))
+#         uncertainty_scores.sort(reverse=True)
+#         # 选择不确定性最大的 10% 数据
+#         top_10_percent = int(len(uncertainty_scores) * 0.1)
+#         selected_indices = [idx for _, idx in uncertainty_scores[:top_10_percent]]
+#
+#     print(bestVal)
+#     print(best)
+#     # model.load_state_dict(torch.load('./GroupINN_model/checkpoint' + str(phi) + '_' + str(ii) + '.pt'))
+#     return student, selected_indices
+
+#
+# def train_original(test_data_loaders, dataset, student, val_dataset=None, test_dataset=None,
+#                    device='cpu', phi=None, early_epoch=200, middle_epoch=300, late_epoch=500,
+#                    supernode=8, fold=0):
+#     """
+#     Implement the progressive uncertainty-based outlier screening with three-phase training
+#     as described in the paper section "Progressive Uncertainty-Based Outlier Screening"
+#     """
+#     # Initialize optimizer and scheduler
+#     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, student.parameters()),
+#                                  lr=0.0001, weight_decay=0.001)
+#     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0.000001)
+#
+#     # Storage for uncertainty scores across three phases
+#     uncertainty_early = []  # Early phase uncertainty scores
+#     uncertainty_middle = []  # Middle phase uncertainty scores
+#     uncertainty_late = []  # Late phase uncertainty scores
+#
+#     best_val_acc = 0.0
+#     best_model_state = None
+#
+#     # Training loop across all epochs
+#     for epoch in range(1, late_epoch + 1):
+#         student.train()
+#         avg_loss = 0.0
+#
+#         # # Phase determination
+#         # current_phase = None
+#         # if epoch <= early_epoch:
+#         #     current_phase = "early"
+#         # elif epoch <= middle_epoch:
+#         #     current_phase = "middle"
+#         # else:
+#         #     current_phase = "late"
+#
+#         # Batch training
+#         for idx, data in enumerate(dataset):
+#             student.zero_grad()
+#
+#             # Prepare batch data
+#             adj = Variable(data['adj'].to(torch.float32), requires_grad=False).to(device)
+#             adj1 = Variable(data['adj1'].to(torch.float32), requires_grad=False).to(device)
+#             adj2 = Variable(data['adj2'].to(torch.float32), requires_grad=False).to(device)
+#             label = Variable(data['label'].long()).to(device)
+#
+#
+#             pred, pred1, pred2, losses, losses1, losses2 = student(adj, adj1, adj2)
+#
+#             # Combined loss (Equation 15)
+#             loss = F.cross_entropy(pred, label) + \
+#                    F.cross_entropy(pred1, label) + \
+#                    F.cross_entropy(pred2, label) + \
+#                    losses + losses1 + losses2
+#
+#             # Backward pass
+#             loss.backward()
+#             nn.utils.clip_grad_norm_(student.parameters(), 2.0)
+#             optimizer.step()
+#             avg_loss += loss.item()
+#
+#         scheduler.step()
+#
+#         # Calculate uncertainty at phase transition points (Equations 11-13)
+#         if epoch == early_epoch or epoch == middle_epoch or epoch == late_epoch:
+#             current_uncertainties = []
+#             student.eval()
+#
+#             with torch.no_grad():
+#                 for batch_data in dataset:
+#                     adj = Variable(batch_data['adj'].to(torch.float32), requires_grad=False).to(device)
+#                     adj1 = Variable(batch_data['adj1'].to(torch.float32), requires_grad=False).to(device)
+#                     adj2 = Variable(batch_data['adj2'].to(torch.float32), requires_grad=False).to(device)
+#
+#                     # Get predictions from all views
+#                     pred, pred1, pred2, _, _, _ = student(adj, adj1, adj2)
+#
+#                     # Combine predictions (softmax probabilities)
+#                     combined_pred = (F.softmax(pred, dim=1) +
+#                                      F.softmax(pred1, dim=1) +
+#                                      F.softmax(pred2, dim=1)) / 3
+#
+#                     # Calculate entropy-based uncertainty (Equation 12)
+#                     entropy = -torch.sum(combined_pred * torch.log(combined_pred + 1e-10), dim=1)
+#                     current_uncertainties.extend(entropy.cpu().numpy())
+#
+#             # Store uncertainties by phase
+#             if epoch == early_epoch:
+#                 uncertainty_early = current_uncertainties
+#             elif epoch == middle_epoch:
+#                 uncertainty_middle = current_uncertainties
+#             else:
+#                 uncertainty_late = current_uncertainties
+#
+#         # Validation and evaluation
+#         if val_dataset is not None:
+#             student.eval()
+#             with torch.no_grad():
+#                 # Training set evaluation
+#                 _, train_result, train_result1, train_result2, _, _, _ = evaluate(
+#                     dataset, student, name='Train', device=device)
+#
+#                 val_loss, val_result, val_result1, val_result2, _, _, _ = evaluate(
+#                     val_dataset, student, name='Validation', device=device)
+#
+#
+#                 _, _, _, _, pre, pre1, pre2 = evaluate(
+#                     test_data_loaders, student, name='Test', device=device)
+#
+#
+#                 if val_result['accuracy'] > best_val_acc:
+#                     best_val_acc = val_result['accuracy']
+#                     best_model_state = student.state_dict()
+#
+#                 print(f'Epoch {epoch}:')
+#                 print(f'Train Accuracy: {train_result["accuracy"]:.4f} | Val Accuracy: {val_result["accuracy"]:.4f}')
+#
+#
+#     weights = {'early': 0.2, 'middle': 0.3, 'late': 0.5}
+#     #weights = {'early': 0.1, 'middle': 0.2, 'late': 0.7}
+#     #weights = {'early': 0.2, 'middle': 0.4, 'late': 0.4}
+#     final_scores = (
+#             weights['early'] * np.array(uncertainty_early) +
+#             weights['middle'] * np.array(uncertainty_middle) +
+#             weights['late'] * np.array(uncertainty_late)
+#     )
+#
+#     sorted_indices = np.argsort(final_scores)[::-1]
+#     top_k = int(len(sorted_indices) * 0.10)
+#     selected_indices = sorted_indices[:top_k]
+#
+#
+#     if best_model_state is not None:
+#         student.load_state_dict(best_model_state)
+#
+#     return student, selected_indices
+
+
+
+
+
 def train_original(test_data_loaders, dataset, student, val_dataset=None, test_dataset=None,
-          device='cpu', phi=None, early_epoch=200, middle_epoch=300, late_epoch=500, supernode=8, fold=0):
+          device='cpu', phi=None, early_epoch=200, middle_epoch=300, late_epoch=500,
+          supernode=8, fold=0, wearly=0.3, wmiddle=0.3, wlate=0.4, top_ratio=0.1):
 
     optimizer2 = torch.optim.Adam(filter(lambda p: p.requires_grad, student.parameters()), lr=0.0001,
                                   weight_decay=0.001)
     cosinLR2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer2, T_max=20, eta_min=0.000001)
-    for name in student.state_dict():
-        print(name)
+
     iter = 0
     best_val_acc = 0.0
-    #early_stopping = EarlyStopping(patience=40, verbose=True)
     bestVal = []
     best = 0
     global ii
     ii += 1
 
+    # 保存各阶段的不确定性
+    uncertainty_dict = {"early": None, "middle": None, "late": None}
+
     for epoch in range(1, late_epoch+1):
-        begin_time = time.time()
-        avg_loss = 0.0
-        student.train()
-        print(epoch)
-        print("train_for_original")
-        # pbar = len(dataset)
-        for idx, data in enumerate(dataset):
-
-            if epoch < 0:
-                for k, v in student.named_parameters():
-                    if k != 'gcn1_p.kernel' and k != 'gcn2_p.kernel' and k != 'gcn3_p.kernel' and k != 'gcn1_n.kernel' and k != 'gcn2_n.kernel' and k != 'gcn3_n.kernel':
-                        v.requires_grad = False  # 固定参数
-                time1 = time.time()
-                student.zero_grad()
-                adj = Variable(data['adj'].to(torch.float32), requires_grad=False).to(device)
-                label = Variable(data['label'].long()).to(device)
-                pred, losses = student(adj)
-                loss = F.cross_entropy(pred, label, size_average=True)
-                loss += losses
-                loss.backward()
-                time3 = time.time()
-                nn.utils.clip_grad_norm_(student.parameters(), 2.0)
-                optimizer1.step()
-                iter += 1
-                avg_loss += loss
-            else:
-                for k, v in student.named_parameters():
-                    v.requires_grad = True
-                time1 = time.time()
-                student.zero_grad()
-
-
-                adj_train = Variable(data['adj'].to(torch.float32), requires_grad=False).to(device)
-                adj1_train = Variable(data['adj1'].to(torch.float32), requires_grad=False).to(device)
-                adj2_train = Variable(data['adj2'].to(torch.float32), requires_grad=False).to(device)
-
-                label = Variable(data['label'].long(), requires_grad=False).to(device)
-
-                pred, pred1, pred2, losses, losses1, losses2 = student(adj_train, adj1_train, adj2_train)
-
-                loss = F.cross_entropy(pred, label, size_average=True)
-                loss1 = F.cross_entropy(pred1, label, size_average=True)
-                loss2 = F.cross_entropy(pred2, label, size_average=True)
-                loss += losses
-                loss1 += losses1
-                loss2 += losses2
-
-                loss = loss + loss1 + loss2
-
-                loss.backward()
-
-                time3 = time.time()
-                nn.utils.clip_grad_norm_(student.parameters(), 2.0)
-                optimizer2.step()
-
-                iter += 1
-                avg_loss += loss
-
-        avg_loss /= idx + 1
-        # print(avg_loss)
-        eval_time = time.time()
-        if val_dataset is not None:
-            _, train_result, train_result1, train_result2, _, _, _ = evaluate(dataset, student, name='Train', device=device)
-            val_loss, val_result, val_result1, val_result2, _, _, _ = evaluate(val_dataset, student, name='Validation', device=device)
-            _, _, _, _, pre, pre1, pre2 = evaluate(test_data_loaders, student, name='Test', device=device)
-            pre_all = pre + pre1 + pre2
-
-            pre_all = pre_all.tolist()
-            temp = np.array(pre_all)
-            res = np.argmax(temp, axis=1)
-
-            pre_all = np.array(res)
-
-            test_result, _ = evaluate_all(test_data_loaders, pre_all)
-
-            print('train1', train_result)
-            print('val1', val_result)
-            print('train2', train_result1)
-            print('val2', val_result1)
-            print('train3', train_result2)
-            print('val3', val_result2)
-
-    for k, v in student.named_parameters():
-        v.requires_grad = False
-
-    uncertainty_scores = []
-    with torch.no_grad():
-        for batch_idx, batch_data in enumerate(dataset):
-            preds = []
-            preds1 = []
-            preds2 = []
-            adj = Variable(batch_data['adj'].to(torch.float32), requires_grad=False).to(device)
-            adj1 = Variable(batch_data['adj1'].to(torch.float32), requires_grad=False).to(device)
-            adj2 = Variable(batch_data['adj2'].to(torch.float32), requires_grad=False).to(device)
-            pred, pred1, pred2, losses, losses1, losses2 = student(adj, adj1, adj2)
-            for i in pred:
-                preds.append(np.array(i.cpu()))
-            for i in pred1:
-                preds1.append(np.array(i.cpu()))
-            for i in pred2:
-                preds2.append(np.array(i.cpu()))
-            pres_all = np.array(preds)
-            pres_all1 = np.array(preds1)
-            pres_all2 = np.array(preds2)
-            pre_all = pres_all + pres_all1 + pres_all2
-            # 计算不确定性
-            batch_uncertainty_scores = uncertainty(pre_all)
-            for idx, uncertainty_score in enumerate(batch_uncertainty_scores):
-                uncertainty_scores.append((uncertainty_score.item(), batch_idx * 32 + idx))
-        uncertainty_scores.sort(reverse=True)
-        # 选择不确定性最大的 10% 数据
-        top_10_percent = int(len(uncertainty_scores) * 0.1)
-        selected_indices = [idx for _, idx in uncertainty_scores[:top_10_percent]]
-
-        # # 根据选定的索引获取对应的数据
-        # selected_data = [dataset[idx] for idx in selected_indices]
-
-    print(bestVal)
-    print(best)
-    # model.load_state_dict(torch.load('./GroupINN_model/checkpoint' + str(phi) + '_' + str(ii) + '.pt'))
-    return student, selected_indices
-
-
-def train_original(test_data_loaders, dataset, student, val_dataset=None, test_dataset=None,
-                   device='cpu', phi=None, early_epoch=200, middle_epoch=300, late_epoch=500,
-                   supernode=8, fold=0):
-    """
-    Implement the progressive uncertainty-based outlier screening with three-phase training
-    as described in the paper section "Progressive Uncertainty-Based Outlier Screening"
-    """
-    # Initialize optimizer and scheduler
-    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, student.parameters()),
-                                 lr=0.0001, weight_decay=0.001)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0.000001)
-
-    # Storage for uncertainty scores across three phases
-    uncertainty_early = []  # Early phase uncertainty scores
-    uncertainty_middle = []  # Middle phase uncertainty scores
-    uncertainty_late = []  # Late phase uncertainty scores
-
-    best_val_acc = 0.0
-    best_model_state = None
-
-    # Training loop across all epochs
-    for epoch in range(1, late_epoch + 1):
         student.train()
         avg_loss = 0.0
+        print(f"Epoch {epoch} / {late_epoch} (train_for_original)")
 
-        # # Phase determination
-        # current_phase = None
-        # if epoch <= early_epoch:
-        #     current_phase = "early"
-        # elif epoch <= middle_epoch:
-        #     current_phase = "middle"
-        # else:
-        #     current_phase = "late"
-
-        # Batch training
         for idx, data in enumerate(dataset):
             student.zero_grad()
+            for k, v in student.named_parameters():
+                v.requires_grad = True
 
-            # Prepare batch data
-            adj = Variable(data['adj'].to(torch.float32), requires_grad=False).to(device)
-            adj1 = Variable(data['adj1'].to(torch.float32), requires_grad=False).to(device)
-            adj2 = Variable(data['adj2'].to(torch.float32), requires_grad=False).to(device)
-            label = Variable(data['label'].long()).to(device)
+            adj_train = Variable(data['adj'].to(torch.float32), requires_grad=False).to(device)
+            adj1_train = Variable(data['adj1'].to(torch.float32), requires_grad=False).to(device)
+            adj2_train = Variable(data['adj2'].to(torch.float32), requires_grad=False).to(device)
+            label = Variable(data['label'].long(), requires_grad=False).to(device)
 
-            # Forward pass (Equation 10 in paper)
-            pred, pred1, pred2, losses, losses1, losses2 = student(adj, adj1, adj2)
+            pred, pred1, pred2, losses, losses1, losses2 = student(adj_train, adj1_train, adj2_train)
 
-            # Combined loss (Equation 15)
-            loss = F.cross_entropy(pred, label) + \
-                   F.cross_entropy(pred1, label) + \
-                   F.cross_entropy(pred2, label) + \
-                   losses + losses1 + losses2
+            loss = F.cross_entropy(pred, label, reduction="mean")
+            loss1 = F.cross_entropy(pred1, label, reduction="mean")
+            loss2 = F.cross_entropy(pred2, label, reduction="mean")
+            loss = loss + loss1 + loss2 + losses + losses1 + losses2
 
-            # Backward pass
             loss.backward()
             nn.utils.clip_grad_norm_(student.parameters(), 2.0)
-            optimizer.step()
+            optimizer2.step()
+
+            iter += 1
             avg_loss += loss.item()
 
-        scheduler.step()
+        avg_loss /= (idx + 1)
 
-        # Calculate uncertainty at phase transition points (Equations 11-13)
-        if epoch == early_epoch or epoch == middle_epoch or epoch == late_epoch:
-            current_uncertainties = []
-            student.eval()
-
+        # ---- 在 early / middle / late 阶段保存不确定性 ----
+        if epoch in [early_epoch, middle_epoch, late_epoch]:
+            phase = "early" if epoch == early_epoch else ("middle" if epoch == middle_epoch else "late")
+            print(f"===> Collecting {phase} uncertainty at epoch {epoch}")
+            uncertainty_scores = []
             with torch.no_grad():
-                for batch_data in dataset:
+                for batch_idx, batch_data in enumerate(dataset):
+                    preds, preds1, preds2 = [], [], []
                     adj = Variable(batch_data['adj'].to(torch.float32), requires_grad=False).to(device)
                     adj1 = Variable(batch_data['adj1'].to(torch.float32), requires_grad=False).to(device)
                     adj2 = Variable(batch_data['adj2'].to(torch.float32), requires_grad=False).to(device)
-
-                    # Get predictions from all views
                     pred, pred1, pred2, _, _, _ = student(adj, adj1, adj2)
 
-                    # Combine predictions (softmax probabilities)
-                    combined_pred = (F.softmax(pred, dim=1) +
-                                     F.softmax(pred1, dim=1) +
-                                     F.softmax(pred2, dim=1)) / 3
+                    preds.extend([np.array(i.cpu()) for i in pred])
+                    preds1.extend([np.array(i.cpu()) for i in pred1])
+                    preds2.extend([np.array(i.cpu()) for i in pred2])
 
-                    # Calculate entropy-based uncertainty (Equation 12)
-                    entropy = -torch.sum(combined_pred * torch.log(combined_pred + 1e-10), dim=1)
-                    current_uncertainties.extend(entropy.cpu().numpy())
+                    pre_all = np.array(preds) + np.array(preds1) + np.array(preds2)
+                    batch_uncertainty_scores = uncertainty(pre_all)
 
-            # Store uncertainties by phase
-            if epoch == early_epoch:
-                uncertainty_early = current_uncertainties
-            elif epoch == middle_epoch:
-                uncertainty_middle = current_uncertainties
-            else:
-                uncertainty_late = current_uncertainties
+                    for idx_u, uncertainty_score in enumerate(batch_uncertainty_scores):
+                        uncertainty_scores.append((uncertainty_score.item(),
+                                                   batch_idx * args.batch_size + idx_u))
+            # 保存当前阶段不确定性
+            uncertainty_dict[phase] = uncertainty_scores
 
-        # Validation and evaluation
-        if val_dataset is not None:
-            student.eval()
-            with torch.no_grad():
-                # Training set evaluation
-                _, train_result, train_result1, train_result2, _, _, _ = evaluate(
-                    dataset, student, name='Train', device=device)
+    # === 训练结束后，融合早中晚三个阶段的不确定性 ===
+    print("Combining uncertainties from early, middle, late phases...")
+    final_uncertainty = []
 
-                val_loss, val_result, val_result1, val_result2, _, _, _ = evaluate(
-                    val_dataset, student, name='Validation', device=device)
+    for i in range(len(uncertainty_dict["late"])):
+        u_early = uncertainty_dict["early"][i][0]
+        u_middle = uncertainty_dict["middle"][i][0]
+        u_late = uncertainty_dict["late"][i][0]
+        idx_sample = uncertainty_dict["late"][i][1]  # 样本 index
 
+        u_final = wearly * u_early + wmiddle * u_middle + wlate * u_late
+        final_uncertainty.append((u_final, idx_sample))
 
-                _, _, _, _, pre, pre1, pre2 = evaluate(
-                    test_data_loaders, student, name='Test', device=device)
-
-
-                if val_result['accuracy'] > best_val_acc:
-                    best_val_acc = val_result['accuracy']
-                    best_model_state = student.state_dict()
-
-                print(f'Epoch {epoch}:')
-                print(f'Train Accuracy: {train_result["accuracy"]:.4f} | Val Accuracy: {val_result["accuracy"]:.4f}')
-
-
-    weights = {'early': 0.2, 'middle': 0.3, 'late': 0.5}
-    #weights = {'early': 0.1, 'middle': 0.2, 'late': 0.7}
-    #weights = {'early': 0.2, 'middle': 0.4, 'late': 0.4}
-    final_scores = (
-            weights['early'] * np.array(uncertainty_early) +
-            weights['middle'] * np.array(uncertainty_middle) +
-            weights['late'] * np.array(uncertainty_late)
-    )
-
-    sorted_indices = np.argsort(final_scores)[::-1]
-    top_k = int(len(sorted_indices) * 0.10)
-    selected_indices = sorted_indices[:top_k]
-
-
-    if best_model_state is not None:
-        student.load_state_dict(best_model_state)
+    final_uncertainty.sort(reverse=True)
+    top_k = int(len(final_uncertainty) * top_ratio)
+    selected_indices = [idx for _, idx in final_uncertainty[:top_k]]
 
     return student, selected_indices
+
+
+
 
 
 def train(raw_data, test_data_loaders, dataset, student, val_dataset=None, test_dataset=None,
@@ -1508,27 +1710,7 @@ def train(raw_data, test_data_loaders, dataset, student, val_dataset=None, test_
             print('val2', val_result1)
             print('train3', train_result2)
             print('val3', val_result2)
-            # writer1.add_scalar('acc' + str(ii), val_result['acc'], global_step=epoch)
-            # writer1.add_scalar('loss' + str(ii), val_loss, global_step=epoch)
-            # writer1.add_scalar('train_loss' + str(ii), avg_loss, global_step=epoch)
-            # if val_result['acc'] >= best_val_acc:
-            #     torch.save(model.state_dict(), './GroupINN_model/checkpoint' + str(phi) + '_' + str(supernode) + '_' + str(ii) + '.pt')
-            #
-            #     torch.save(model.state_dict(), 'checkpoint' + str(ii) + '.pt')
-            #     # print('save pth.......')
-            #     best_val_acc = val_result['acc']
-            #     # print('val          ', val_result)
-            #     bestVal = val_result
-            #     best = epoch
-            # torch.save(model.state_dict(), './models/model_约束2' + '_' + str(ii) + '.pt')
 
-        # early_stopping(0-val_result['acc'], model)
-        # if test_dataset is not None:
-        #     test_loss, test_result = evaluate(test_dataset, model, name='Validation', device=device)
-        #     print('test         ', test_result)
-        # if early_stopping.early_stop:
-        #     print("Early stopping")
-        #     break
     print(bestVal)
     print(best)
     # model.load_state_dict(torch.load('./GroupINN_model/checkpoint' + str(phi) + '_' + str(ii) + '.pt'))
@@ -1602,8 +1784,12 @@ def main():
         student.to(device)
 
         model, selected_indices = train_original(test_data_loaders[i], train_data_loaders[i], student, val_dataset=valid_data_loaders[i],
-                      test_dataset=test_data_loaders[i], device=device, phi=0.6, e=args.epochs_original, supernode=args.super_nodes, fold=i)
+                      test_dataset=test_data_loaders[i], device=device, phi=0.6, early_epoch=args.epochs_early, middle_epoch=args.epochs_middle, late_epoch=args.epochs_late,
+                                                 supernode=args.super_nodes, fold=i, wearly=0.2, wmiddle=0.3, wlate=0.5, top_ratio=args.ratio_outlier)
+
+
         selected_indices_list.append(selected_indices)
+
 
         _, test_result, test_result1, test_result2, pre, pre1, pre2 = evaluate(test_data_loaders[i], model, name='Test', device=device)
         pre_all = pre + pre1 + pre2
@@ -1631,7 +1817,7 @@ def main():
         jj+=1
         student.to(device)
 
-        model = train(raw_data, test_data_loaders[i], train_data_loaders[i], student, teacher, val_dataset=valid_data_loaders[i],
+        model = train(raw_data, test_data_loaders[i], train_data_loaders[i], student, val_dataset=valid_data_loaders[i],
                       test_dataset=test_data_loaders[i], device=device, phi=0.6, e=args.epochs, supernode=args.super_nodes, fold=i)
 
         _, test_result, test_result1, test_result2, pre, pre1, pre2 = evaluate(test_data_loaders[i], model, name='Test', device=device)
@@ -1665,37 +1851,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-'''
-[{'prec': 0.676056338028169, 'recall': 0.5925925925925926, 'acc': 0.68, 'F1': 0.6743753322700691, 'auc': 0.6739558707643815, 'matrix': array([[71, 23],
-       [33, 48]])}, {'prec': 0.6338028169014085, 'recall': 0.5555555555555556, 'acc': 0.6436781609195402, 'F1': 0.637889366272825, 'auc': 0.6379928315412187, 'matrix': array([[67, 26],
-       [36, 45]])}, {'prec': 0.546875, 'recall': 0.43209876543209874, 'acc': 0.5689655172413793, 'F1': 0.5566502463054187, 'auc': 0.5601354042214257, 'matrix': array([[64, 29],
-       [46, 35]])}, {'prec': 0.6153846153846154, 'recall': 0.6, 'acc': 0.6436781609195402, 'F1': 0.6406395736175883, 'auc': 0.6404255319148936, 'matrix': array([[64, 30],
-       [32, 48]])}, {'prec': 0.5774647887323944, 'recall': 0.5125, 'acc': 0.603448275862069, 'F1': 0.5963962752546474, 'auc': 0.5966755319148935, 'matrix': array([[64, 30],
-       [39, 41]])}]
-[{'prec': 0.6615384615384615, 'recall': 0.5308641975308642, 'acc': 0.6571428571428571, 'F1': 0.6474617244157937, 'auc': 0.6484108221696875, 'matrix': array([[72, 22],
-       [38, 43]])}, {'prec': 0.7014925373134329, 'recall': 0.5802469135802469, 'acc': 0.6896551724137931, 'F1': 0.6825675675675675, 'auc': 0.6825965750696933, 'matrix': array([[73, 20],
-       [34, 47]])}, {'prec': 0.5490196078431373, 'recall': 0.691358024691358, 'acc': 0.5919540229885057, 'F1': 0.5908594138102335, 'auc': 0.5983671843886897, 'matrix': array([[47, 46],
-       [25, 56]])}, {'prec': 0.5753424657534246, 'recall': 0.525, 'acc': 0.603448275862069, 'F1': 0.5975867269984918, 'auc': 0.5976063829787234, 'matrix': array([[63, 31],
-       [38, 42]])}, {'prec': 0.547945205479452, 'recall': 0.5, 'acc': 0.5804597701149425, 'F1': 0.5742584213172448, 'auc': 0.5744680851063829, 'matrix': array([[61, 33],
-       [40, 40]])}]
-[{'prec': 0.6712328767123288, 'recall': 0.6049382716049383, 'acc': 0.68, 'F1': 0.6753246753246753, 'auc': 0.6748095613343841, 'matrix': array([[70, 24],
-       [32, 49]])}, {'prec': 0.6447368421052632, 'recall': 0.6049382716049383, 'acc': 0.6609195402298851, 'F1': 0.6576516490479207, 'auc': 0.6573078454798885, 'matrix': array([[66, 27],
-       [32, 49]])}, {'prec': 0.5569620253164557, 'recall': 0.5432098765432098, 'acc': 0.5862068965517241, 'F1': 0.5835106382978723, 'auc': 0.5834328952608523, 'matrix': array([[58, 35],
-       [37, 44]])}, {'prec': 0.5897435897435898, 'recall': 0.575, 'acc': 0.6206896551724138, 'F1': 0.6174550299800132, 'auc': 0.6172872340425531, 'matrix': array([[62, 32],
-       [34, 46]])}, {'prec': 0.6103896103896104, 'recall': 0.5875, 'acc': 0.6379310344827587, 'F1': 0.6344415913562543, 'auc': 0.6341755319148936, 'matrix': array([[64, 30],
-       [33, 47]])}]
-------------------------------------
-{'prec': 0.6956521739130435, 'recall': 0.5925925925925926, 'acc': 0.6914285714285714, 'F1': 0.6849999999999999, 'auc': 0.6845941686367218, 'matrix': array([[73, 21],
-       [33, 48]])}
-{'prec': 0.7285714285714285, 'recall': 0.6296296296296297, 'acc': 0.7183908045977011, 'F1': 0.7133828621373584, 'auc': 0.7126642771804063, 'matrix': array([[74, 19],
-       [30, 51]])}
-{'prec': 0.5903614457831325, 'recall': 0.6049382716049383, 'acc': 0.6206896551724138, 'F1': 0.6194326617179216, 'auc': 0.6196734368777379, 'matrix': array([[59, 34],
-       [32, 49]])}
-{'prec': 0.6493506493506493, 'recall': 0.625, 'acc': 0.6724137931034483, 'F1': 0.6692566778937539, 'auc': 0.6688829787234043, 'matrix': array([[67, 27],
-       [30, 50]])}
-{'prec': 0.575, 'recall': 0.575, 'acc': 0.6091954022988506, 'F1': 0.6066489361702128, 'auc': 0.6066489361702128, 'matrix': array([[60, 34],
-       [34, 46]])}
-
-Process finished with exit code 0
-662
-'''
